@@ -60,7 +60,7 @@ class Map(pygame.sprite.Sprite):
 class ScoreCounter(pygame.sprite.Sprite):
     def __init__(self, display_text):
         pygame.sprite.Sprite.__init__(self)
-        self.image = pygame.Surface([50, 50])
+        self.image = pygame.Surface([150, 150])
         self.image.set_colorkey(View.TRANS)
         self.image.fill(View.TRANS)
         self.rect = self.image.get_rect()
@@ -85,17 +85,16 @@ class View:
     clock = pygame.time.Clock()
     mouse_x = 0
     mouse_y = 0
-    last_enemy_spawn = time.perf_counter()
+    last_droppable_spawn = time.perf_counter()
     paddle = None
     score = 0
 
     all_sprites_group = pygame.sprite.Group()
     ship_group = pygame.sprite.Group()
-    enemy_group = pygame.sprite.Group()
+    droppable_group = pygame.sprite.Group()
     score_counter = None
 
-    ping_sfx = pygame.mixer.Sound('ping.wav')
-    miss_sfx = pygame.mixer.Sound('miss.wav')
+    
 
     def __init__(self):
         pygame.init()
@@ -105,6 +104,8 @@ class View:
         self.paddle.add(self.all_sprites_group, self.ship_group)
         self.draw_map()
         self.draw_score()
+        self.ping_sfx = pygame.mixer.Sound('ping.wav')
+        self.miss_sfx = pygame.mixer.Sound('miss.wav')
 
     def draw_map(self):
         basic_map = Map() 
@@ -136,18 +137,24 @@ class View:
                     self.paddle.move(1)
 
     def update(self):
-        if time.perf_counter() - self.last_enemy_spawn > 2.0:
+        if time.perf_counter() - self.last_droppable_spawn > 2.0:
             random_x = random.randint(1,6)
-            baddie = Droppable(random_x * 100, 100)
-            baddie.add(self.all_sprites_group, self.enemy_group)
-            self.last_enemy_spawn = time.perf_counter()
+            droppable = Droppable(random_x * 100, 100)
+            droppable.add(self.all_sprites_group, self.droppable_group)
+            self.last_droppable_spawn = time.perf_counter()
 
-        collision = pygame.sprite.spritecollideany(self.paddle, self.enemy_group)
+        collision = pygame.sprite.spritecollideany(self.paddle, self.droppable_group)
         if collision:
             self.ping_sfx.play()
             self.score += 1
             self.draw_score()
             collision.kill()
+
+        miss = [droppable for droppable in self.droppable_group if droppable.y >= 650]
+        if miss:
+            self.miss_sfx.play()
+            self.score -= 1
+            self.draw_score()
 
         self.all_sprites_group.update()
 
