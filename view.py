@@ -2,23 +2,37 @@ import pygame, sys, time, random
 from pygame.locals import *
 
 class Player(pygame.sprite.Sprite):
+    velocity = 0
     def __init__(self, x, y):
         pygame.sprite.Sprite.__init__(self)
-        self.image = pygame.Surface([100, 20])
-        self.image.set_colorkey(View.TRANS)
-        self.image.fill(View.TRANS)
+        self.paddle_flat = pygame.image.load('artwork/paddle.png')
+        self.paddle_left = pygame.image.load('artwork/paddle_left_full.png')
+        self.paddle_right = pygame.image.load('artwork/paddle_right_full.png')
+        self.image = self.paddle_flat
         self.rect = self.image.get_rect()
         self.rect.center = (x, y)
-        pygame.draw.rect(
-            self.image,
-            View.BLUE,
-            (0,0,100,20),)
         self.x = x
         self.y = y
 
     def move(self, x):
-        self.x += x*20
-        self.rect.center = (self.x, self.y)
+        if x < 0:
+            self.image = self.paddle_left
+        if x > 0:
+            self.image = self.paddle_right
+        self.velocity = x
+
+    def stop(self):
+        self.image = self.paddle_flat
+        self.velocity = 0
+
+    def update(self):
+        if 120 <= self.x + self.velocity <= 580:
+            if 0 < self.velocity < 15:
+                self.velocity += .75
+            if -15 < self.velocity < 0:
+                self.velocity -= .75
+            self.x += self.velocity
+            self.rect.center = (self.x, self.y)
 
 class Droppable(pygame.sprite.Sprite):
     def __init__(self, x, y):
@@ -130,11 +144,11 @@ class View:
             elif event.type == pygame.QUIT:
                 self.quit()
             elif event.type == KEYDOWN and event.key == K_LEFT:
-                if self.paddle.x >= 120:
-                    self.paddle.move(-1)
+                self.paddle.move(-1)
             elif event.type == KEYDOWN and event.key == K_RIGHT:
-                if self.paddle.x <=580:
-                    self.paddle.move(1)
+                self.paddle.move(1)
+            elif event.type == KEYUP and event.key == K_LEFT or event.type == KEYUP and event.key == K_RIGHT:
+                self.paddle.stop()
 
     def update(self):
         if time.perf_counter() - self.last_droppable_spawn > 2.0:
