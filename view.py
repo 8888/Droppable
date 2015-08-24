@@ -3,6 +3,7 @@ from pygame.locals import *
 
 class Player(pygame.sprite.Sprite):
     velocity = 0
+    target_droppable = None
     def __init__(self, x, y):
         pygame.sprite.Sprite.__init__(self)
         self.paddle_flat = pygame.image.load('artwork/paddle.png')
@@ -26,7 +27,20 @@ class Player(pygame.sprite.Sprite):
         self.velocity = 0
 
     def update(self):
-        if 120 <= self.x + self.velocity <= 580:
+        if self.target_droppable:
+            if self.velocity == 0 and abs(self.x - self.target_droppable.x) > 10:
+                if self.x > self.target_droppable.x:
+                    self.move(-1)
+                elif self.x < self.target_droppable.x:
+                    self.move(1)
+            elif self.velocity < 0:
+                if self.x <= self.target_droppable.x:
+                    self.stop()
+            elif self.velocity > 0:
+                if self.x >= self.target_droppable.x:
+                    self.stop()
+
+        if 100 <= self.x + self.velocity <= 600:
             if 0 < self.velocity < 15:
                 self.velocity += .75
             if -15 < self.velocity < 0:
@@ -35,31 +49,21 @@ class Player(pygame.sprite.Sprite):
             self.rect.center = (self.x, self.y)
 
 class Droppable(pygame.sprite.Sprite):
-    def __init__(self, x, y):
+    def __init__(self, x, y, velocity, points):
         pygame.sprite.Sprite.__init__(self)
-        self.image = pygame.Surface([40, 40])
-        self.image.set_colorkey(View.TRANS)
-        self.image.fill(View.TRANS)
+        self.image = pygame.image.load('artwork/basic_droppable.png')
         self.rect = self.image.get_rect()
         self.rect.center = (x, y)
-        pygame.draw.circle(
-            self.image,
-            View.GREEN,
-            (20, 20),
-            20,
-            0)
         self.x = x
         self.y = y
-        self.missed = False
+        self.velocity = velocity
+        self.points = points
 
     def update(self):
-        if self.missed:
-            self.kill()
-        self.y += 5
+        self.y += self.velocity
         self.rect.center = (self.x, self.y)
         if self.y >=650:
             self.image.fill(View.RED)
-            self.missed = True
 
 class Map(pygame.sprite.Sprite):
     def __init__(self):
@@ -102,13 +106,12 @@ class View:
     last_droppable_spawn = time.perf_counter()
     paddle = None
     score = 0
+    user_playing = True
 
     all_sprites_group = pygame.sprite.Group()
     ship_group = pygame.sprite.Group()
     droppable_group = pygame.sprite.Group()
     score_counter = None
-
-    
 
     def __init__(self):
         pygame.init()
@@ -129,7 +132,31 @@ class View:
         if self.score_counter:
             self.score_counter.kill()
         self.score_counter = ScoreCounter(self.score)
-        self.all_sprites_group.add(self.score_counter)        
+        self.all_sprites_group.add(self.score_counter)
+
+    def set_target_droppable(self):
+        target = self.lowest_droppable()
+        return target
+
+    def lowest_droppable(self):
+        current_lowest = None
+        for droppable in self.droppable_group:
+            if current_lowest:
+                if droppable.y > current_lowest.y:
+                    current_lowest = droppable
+            else:
+                current_lowest = droppable
+        return current_lowest
+
+    def spawn_droppable(self):
+        random_x = random.randint(1,6)
+        random_droppable = random.randint(1,10)
+        if random_droppable <= 7: # 70% chance for regular speed droppable
+            droppable = Droppable(random_x * 100, 50, 5, 1)
+        else: # 30% chance for fast droppable
+            droppable = Droppable(random_x * 100, 50, 10, 3)
+        droppable.add(self.all_sprites_group, self.droppable_group)
+        self.last_droppable_spawn = time.perf_counter()
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -143,32 +170,46 @@ class View:
                 y = int(mouse_y / 200)
             elif event.type == pygame.QUIT:
                 self.quit()
-            elif event.type == KEYDOWN and event.key == K_LEFT:
-                self.paddle.move(-1)
-            elif event.type == KEYDOWN and event.key == K_RIGHT:
-                self.paddle.move(1)
-            elif event.type == KEYUP and event.key == K_LEFT or event.type == KEYUP and event.key == K_RIGHT:
-                self.paddle.stop()
+            elif event.type == KEYDOWN and event.key == K_DOWN:
+                    self.user_playing = True
+                    self.paddle.stop()
+                    self.paddle.target_droppable = None
+            if self.user_playing:
+                if event.type == KEYDOWN and event.key == K_UP:
+                    self.user_playing = False
+                elif event.type == KEYDOWN and event.key == K_LEFT:
+                    self.paddle.move(-1)
+                elif event.type == KEYDOWN and event.key == K_RIGHT:
+                    self.paddle.move(1)
+                elif event.type == KEYUP and event.key == K_LEFT or event.type == KEYUP and event.key == K_RIGHT:
+                    self.paddle.stop()
 
     def update(self):
-        if time.perf_counter() - self.last_droppable_spawn > 2.0:
-            random_x = random.randint(1,6)
-            droppable = Droppable(random_x * 100, 100)
-            droppable.add(self.all_sprites_group, self.droppable_group)
-            self.last_droppable_spawn = time.perf_counter()
+        if time.perf_counter() - self.last_droppable_spawn > 0.5:
+            self.spawn_droppable()
 
         collision = pygame.sprite.spritecollideany(self.paddle, self.droppable_group)
         if collision:
             self.ping_sfx.play()
-            self.score += 1
+            self.score += collision.points
             self.draw_score()
+            if collision == self.paddle.target_droppable:
+                self.paddle.target_droppable = None
             collision.kill()
 
         miss = [droppable for droppable in self.droppable_group if droppable.y >= 650]
         if miss:
-            self.miss_sfx.play()
-            self.score -= 1
-            self.draw_score()
+            for droppable in miss:
+                self.miss_sfx.play()
+                self.score -= droppable.points
+                self.draw_score()
+                if droppable == self.paddle.target_droppable:
+                    self.paddle.target_droppable = None
+                droppable.kill()
+
+        if not self.user_playing:
+            if not self.paddle.target_droppable and self.droppable_group:
+                self.paddle.target_droppable = self.set_target_droppable()
 
         self.all_sprites_group.update()
 
