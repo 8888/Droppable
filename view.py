@@ -49,9 +49,11 @@ class Player(pygame.sprite.Sprite):
             self.rect.center = (self.x, self.y)
 
 class Droppable(pygame.sprite.Sprite):
-    def __init__(self, x, y, velocity, points):
+    def __init__(self, animations, x, y, velocity, points):
         pygame.sprite.Sprite.__init__(self)
-        self.image = pygame.image.load('artwork/basic_droppable.png')
+        self.animations = animations
+        self.animation_counter = 0
+        self.image = self.animations[self.animation_counter]
         self.rect = self.image.get_rect()
         self.rect.center = (x, y)
         self.x = x
@@ -60,10 +62,15 @@ class Droppable(pygame.sprite.Sprite):
         self.points = points
 
     def update(self):
+        if self.animation_counter < 3:
+            self.animation_counter += 1
+        else:
+            self.animation_counter = 0
+        self.image = self.animations[self.animation_counter]
         self.y += self.velocity
         self.rect.center = (self.x, self.y)
         if self.y >=650:
-            self.image.fill(View.RED)
+            self.image.fill(View.RED) # Kill animation needed
 
 class Map(pygame.sprite.Sprite):
     def __init__(self):
@@ -89,6 +96,23 @@ class ScoreCounter(pygame.sprite.Sprite):
         textpos.centerx = 25
         self.image.blit(text, textpos)
 
+class Spritesheet(object):
+    def __init__(self, filename):
+        self.sheet = pygame.image.load(filename).convert()
+
+    def image_at(self, rectangle, colorkey = None):
+        '''Load image from x, y, x offset, y offset'''
+        rect = pygame.Rect(rectangle)
+        image = pygame.Surface(rect.size).convert()
+        image.blit(self.sheet, (0,0), rect)
+        if colorkey is not None:
+            image.set_colorkey(colorkey, pygame.RLEACCEL)
+        return image
+
+    def images_at(self, rectangles, colorkey = None):
+        '''Load multiple images into a list, supple a list of rectangles'''
+        return [self.image_at(rect, colorkey) for rect in rectangles]
+
 class View:
     BLACK = (  0,   0,   0)
     WHITE = (255, 255, 255)
@@ -96,7 +120,7 @@ class View:
     GREEN = (  0, 255,   0)
     RED =   (255,   0,   0)
     TRANS = (  1,   1,   1)
-    size = [1280, 720]
+    size =  [1280, 720]
 
     screen = None
     done = False
@@ -123,6 +147,7 @@ class View:
         self.draw_score()
         self.ping_sfx = pygame.mixer.Sound('ping.wav')
         self.miss_sfx = pygame.mixer.Sound('miss.wav')
+        self.droppable_sprite_sheet = Spritesheet('artwork/droppable_sprite_sheet.png')
 
     def draw_map(self):
         basic_map = Map() 
@@ -152,9 +177,29 @@ class View:
         random_x = random.randint(1,6)
         random_droppable = random.randint(1,10)
         if random_droppable <= 7: # 70% chance for regular speed droppable
-            droppable = Droppable(random_x * 100, 50, 5, 1)
+            droppable = Droppable(
+                self.droppable_sprite_sheet.images_at([
+                    (0,0,50,50),
+                    (50,0,50,50),
+                    (100,0,50,50),
+                    (150,0,50,50)],
+                    colorkey = self.BLACK),
+                random_x * 100,
+                50,
+                5,
+                1)
         else: # 30% chance for fast droppable
-            droppable = Droppable(random_x * 100, 50, 10, 3)
+            droppable = Droppable(
+                self.droppable_sprite_sheet.images_at([
+                    (0,50,50,50),
+                    (50,50,50,50),
+                    (100,50,50,50),
+                    (150,50,50,50)],
+                    colorkey = self.BLACK),
+                random_x * 100,
+                50,
+                10,
+                3)
         droppable.add(self.all_sprites_group, self.droppable_group)
         self.last_droppable_spawn = time.perf_counter()
 
