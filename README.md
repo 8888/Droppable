@@ -1,5 +1,6 @@
 # Droppable
 This is a basic paddle game where you catch the falling faces.<br>
+<img src="https://github.com/betterin30days/Droppable/blob/master/drop.gif"/><br>
 
 # Project Objectives
 This was created to begin working with spritesheets for custom animations. I also used this to develop a basic AI that will strategically play the game.<br>
